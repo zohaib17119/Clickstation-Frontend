@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import type { CloudR2Settings, CustomerRow, Subscription } from "../api/types";
+import type {
+  CloudR2Settings,
+  CustomerRow,
+  FailedCameraRow,
+  Subscription,
+  SupportedCameraRow,
+} from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 
 const EMPTY_CLOUD: CloudR2Settings = {
@@ -39,6 +45,10 @@ export function AdminPage() {
   const [secretAccessKeySet, setSecretAccessKeySet] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudLoadHint, setCloudLoadHint] = useState("");
+  const [supportedCams, setSupportedCams] = useState<SupportedCameraRow[]>([]);
+  const [failedCams, setFailedCams] = useState<FailedCameraRow[]>([]);
+  const [camBusyKey, setCamBusyKey] = useState<string | null>(null);
+  const [notifyVersion, setNotifyVersion] = useState("");
 
   async function load() {
     if (!token) return;
@@ -48,6 +58,20 @@ export function AdminPage() {
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load customers");
+    }
+  }
+
+  async function loadCameras() {
+    if (!token) return;
+    try {
+      const [okRes, failRes] = await Promise.all([
+        api.listSupportedCameras(token),
+        api.listFailedCameras(token),
+      ]);
+      setSupportedCams(okRes.cameras);
+      setFailedCams(failRes.failures);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load camera telemetry");
     }
   }
 
@@ -75,6 +99,7 @@ export function AdminPage() {
   useEffect(() => {
     void load();
     void loadCloud();
+    void loadCameras();
   }, [token]);
 
   async function saveCloud(testConnection = false) {
@@ -144,6 +169,76 @@ export function AdminPage() {
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function markSupported(row: FailedCameraRow) {
+    if (!token) return;
+    setCamBusyKey(row.deviceKey);
+    setError("");
+    setOk("");
+    try {
+      await api.patchCamera(token, row.deviceKey, {
+        status: "supported",
+        supportedSinceVersion: notifyVersion.trim() || undefined,
+      });
+      await loadCameras();
+      setOk(
+        `Marked ${[row.manufacturer, row.model].filter(Boolean).join(" ") || row.deviceKey} as supported.`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Mark supported failed");
+    } finally {
+      setCamBusyKey(null);
+    }
+  }
+
+  async function previewNotify(row: FailedCameraRow) {
+    if (!token) return;
+    setCamBusyKey(row.deviceKey);
+    setError("");
+    setOk("");
+    try {
+      const res = await api.notifyCamera(token, row.deviceKey, {
+        supportedSinceVersion: notifyVersion.trim() || undefined,
+        dryRun: true,
+      });
+      const emails = (res.recipients ?? []).map((r) => r.email).join(", ") || "none";
+      setOk(
+        `Would email ${res.recipientCount ?? 0} customer(s). SMTP configured: ${
+          res.smtpConfigured ? "yes" : "no"
+        }. Recipients: ${emails}`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Preview notify failed");
+    } finally {
+      setCamBusyKey(null);
+    }
+  }
+
+  async function sendNotify(row: FailedCameraRow) {
+    if (!token) return;
+    setCamBusyKey(row.deviceKey);
+    setError("");
+    setOk("");
+    try {
+      await api.patchCamera(token, row.deviceKey, {
+        status: "supported",
+        supportedSinceVersion: notifyVersion.trim() || undefined,
+      });
+      const res = await api.notifyCamera(token, row.deviceKey, {
+        supportedSinceVersion: notifyVersion.trim() || undefined,
+        dryRun: false,
+      });
+      await loadCameras();
+      setOk(
+        `Emailed ${res.sentCount ?? 0} customer(s) about ${res.brandModel ?? "camera"}` +
+          (res.failedCount ? ` (${res.failedCount} failed)` : "")
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Notify failed");
+    } finally {
+      setCamBusyKey(null);
     }
   }
 
@@ -303,6 +398,147 @@ export function AdminPage() {
           >
             Save &amp; test connection
           </button>
+        </div>
+      </section>
+
+      <section className="admin-cloud-panel software-shell" style={{ marginTop: 28 }}>
+        <div className="admin-cloud-head">
+          <div>
+            <p className="kicker">Camera compatibility</p>
+            <h2>Successfully connected devices</h2>
+            <p className="muted">
+              Models that at least one booth connected successfully. Use this as your known-good
+              list.
+            </p>
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={() => void loadCameras()}>
+            Refresh cameras
+          </button>
+        </div>
+        <div className="admin-table-wrap" style={{ margin: 0, boxShadow: "none" }}>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Brand / model</th>
+                <th>Kind</th>
+                <th>Successes</th>
+                <th>Last success</th>
+                <th>Since version</th>
+              </tr>
+            </thead>
+            <tbody>
+              {supportedCams.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="muted">
+                    No successful camera connections reported yet.
+                  </td>
+                </tr>
+              )}
+              {supportedCams.map((c) => (
+                <tr key={c.deviceKey}>
+                  <td>
+                    <div className="cell-strong">
+                      {[c.manufacturer, c.model].filter(Boolean).join(" ") || c.deviceKey}
+                    </div>
+                    <div className="muted small">{c.deviceKey}</div>
+                  </td>
+                  <td className="small">{c.status}</td>
+                  <td className="small">{c.successCount}</td>
+                  <td className="small">{formatEnds(c.lastSuccessAt)}</td>
+                  <td className="small">{c.supportedSinceVersion || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ marginTop: 28 }}>
+          <h2>Failed connection attempts</h2>
+          <p className="muted">
+            Customers tried these models and never succeeded. Mark supported after you ship a fix,
+            then notify them by email (requires SMTP on the API).
+          </p>
+          <label style={{ display: "block", maxWidth: 280, marginBottom: 12 }}>
+            Notify version label
+            <input
+              type="text"
+              placeholder="e.g. 1.4.0"
+              value={notifyVersion}
+              onChange={(e) => setNotifyVersion(e.target.value)}
+            />
+          </label>
+          <div className="admin-table-wrap" style={{ margin: 0, boxShadow: "none" }}>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Brand / model</th>
+                  <th>Fails</th>
+                  <th>Last error</th>
+                  <th>Customers</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {failedCams.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="muted">
+                      No unresolved camera failures.
+                    </td>
+                  </tr>
+                )}
+                {failedCams.map((f) => (
+                  <tr key={f.deviceKey}>
+                    <td>
+                      <div className="cell-strong">
+                        {[f.manufacturer, f.model].filter(Boolean).join(" ") || f.deviceKey}
+                      </div>
+                      <div className="muted small">
+                        {f.kind || "—"} · {f.status}
+                      </div>
+                    </td>
+                    <td className="small">{f.failCount}</td>
+                    <td className="small">{f.lastError || "—"}</td>
+                    <td className="small">
+                      {f.users.length === 0
+                        ? "—"
+                        : f.users.map((u) => (
+                            <div key={u.userId}>
+                              {u.email}
+                              <span className="muted"> ({formatEnds(u.lastFailAt)})</span>
+                            </div>
+                          ))}
+                    </td>
+                    <td className="actions">
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={camBusyKey === f.deviceKey}
+                        onClick={() => void markSupported(f)}
+                      >
+                        Mark supported
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        disabled={camBusyKey === f.deviceKey}
+                        onClick={() => void previewNotify(f)}
+                      >
+                        Preview notify
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        disabled={camBusyKey === f.deviceKey}
+                        onClick={() => void sendNotify(f)}
+                      >
+                        Email customers
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

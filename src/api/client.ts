@@ -2,8 +2,10 @@ import type {
   AuthPayload,
   CloudR2Settings,
   CustomerRow,
+  FailedCameraRow,
   MePayload,
   Subscription,
+  SupportedCameraRow,
 } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
@@ -104,5 +106,51 @@ export const api = {
         body: JSON.stringify(body),
       }
     );
+  },
+  listSupportedCameras(token: string) {
+    return request<{ cameras: SupportedCameraRow[] }>("/admin/cameras/supported", { token });
+  },
+  listFailedCameras(token: string) {
+    return request<{ failures: FailedCameraRow[] }>("/admin/cameras/failures", { token });
+  },
+  patchCamera(
+    token: string,
+    deviceKey: string,
+    body: {
+      status?: SupportedCameraRow["status"];
+      notes?: string;
+      supportedSinceVersion?: string;
+    }
+  ) {
+    return request<{ camera: SupportedCameraRow }>(
+      `/admin/cameras/${encodeURIComponent(deviceKey)}`,
+      {
+        method: "PATCH",
+        token,
+        body: JSON.stringify(body),
+      }
+    );
+  },
+  notifyCamera(
+    token: string,
+    deviceKey: string,
+    body: { supportedSinceVersion?: string; dryRun?: boolean } = {}
+  ) {
+    return request<{
+      dryRun?: boolean;
+      recipientCount?: number;
+      recipients?: { email: string; name: string; lastFailAt: string }[];
+      smtpConfigured?: boolean;
+      sentCount?: number;
+      failedCount?: number;
+      sent?: string[];
+      failed?: { email: string; error: string }[];
+      brandModel?: string;
+      version?: string;
+    }>(`/admin/cameras/${encodeURIComponent(deviceKey)}/notify`, {
+      method: "POST",
+      token,
+      body: JSON.stringify(body),
+    });
   },
 };

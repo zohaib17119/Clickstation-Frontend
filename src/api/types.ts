@@ -55,3 +55,38 @@ export type CustomerRow = {
     active: boolean;
   } | null;
 };
+
+export type CameraCompatStatus = "unknown" | "supported" | "unsupported" | "in_progress";
+
+export type SupportedCameraRow = {
+  deviceKey: string;
+  manufacturer: string;
+  model: string;
+  status: CameraCompatStatus;
+  notes: string;
+  supportedSinceVersion: string;
+  updatedAt: string;
+  successCount: number;
+  lastSuccessAt: string | null;
+};
+
+export type FailedCameraUser = {
+  userId: string;
+  email: string;
+  name: string;
+  lastFailAt: string;
+};
+
+export type FailedCameraRow = {
+  deviceKey: string;
+  manufacturer: string;
+  model: string;
+  kind: string;
+  failCount: number;
+  lastError: string;
+  lastFailAt: string;
+  status: CameraCompatStatus;
+  notes: string;
+  supportedSinceVersion: string;
+  users: FailedCameraUser[];
+};

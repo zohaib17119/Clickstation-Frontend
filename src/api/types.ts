@@ -17,6 +17,8 @@ export type Subscription = {
   endsAt: string | null;
   notes: string;
   updatedAt: string;
+  /** standard = 72h desktop grace; extended = 365d private Setup */
+  licenseChannel?: "standard" | "extended";
   canDownload: boolean;
 };
 

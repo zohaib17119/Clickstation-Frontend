@@ -96,6 +96,7 @@ export const api = {
       notes?: string;
       extendDays?: number;
       revokeLicenses?: boolean;
+      licenseChannel?: "standard" | "extended";
     }
   ) {
     return request<{ user: CustomerRow["user"]; subscription: Subscription }>(

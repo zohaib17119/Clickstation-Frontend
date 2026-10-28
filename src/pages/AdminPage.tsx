@@ -154,6 +154,7 @@ export function AdminPage() {
       endsAt?: string | null;
       extendDays?: number;
       revokeLicenses?: boolean;
+      licenseChannel?: "standard" | "extended";
     },
     successMsg?: string
   ) {
@@ -592,6 +593,28 @@ export function AdminPage() {
                       <option value="monthly">monthly</option>
                       <option value="yearly">yearly</option>
                     </select>
+                    <div className="small" style={{ marginTop: 6 }}>
+                      Desktop license
+                    </div>
+                    <select
+                      value={subscription?.licenseChannel ?? "standard"}
+                      disabled={busyId === user.id}
+                      title="Standard = 72h offline grace; Extended = 365d (private Setup)"
+                      onChange={(e) =>
+                        void patch(
+                          user.id,
+                          {
+                            licenseChannel: e.target.value as "standard" | "extended",
+                          },
+                          e.target.value === "extended"
+                            ? "License channel → Extended (1 year). Use Turn ON Extended for +365 days."
+                            : "License channel → Standard (72h)."
+                        )
+                      }
+                    >
+                      <option value="standard">Standard (72h)</option>
+                      <option value="extended">Extended (1 year)</option>
+                    </select>
                   </td>
                   <td className="small">{formatEnds(subscription?.endsAt)}</td>
                   <td className="small">
@@ -615,20 +638,41 @@ export function AdminPage() {
                       type="button"
                       className="btn btn-primary"
                       disabled={busyId === user.id}
-                      title="Enable subscription and give +7 days"
+                      title="Enable Standard access (+7 days, 72h offline grace)"
                       onClick={() =>
                         void patch(
                           user.id,
                           {
                             status: "active",
                             paymentStatus: "paid",
+                            licenseChannel: "standard",
                             extendDays: 7,
                           },
-                          "Access ON. Customer can Activate / use after restart if needed."
+                          "Standard access ON (+7 days). Customer can Activate."
                         )
                       }
                     >
                       Turn ON
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busyId === user.id}
+                      title="Enable Extended private Setup access (+365 days offline grace)"
+                      onClick={() =>
+                        void patch(
+                          user.id,
+                          {
+                            status: "active",
+                            paymentStatus: "paid",
+                            licenseChannel: "extended",
+                            extendDays: 365,
+                          },
+                          "Extended access ON (+365 days). Give them ClickStation-Setup-Extended.exe privately."
+                        )
+                      }
+                    >
+                      Turn ON Extended
                     </button>
                     <button
                       type="button"

@@ -171,7 +171,13 @@ export function AdminPlansPanel({
       onMessage("ok", `Stripe sync OK for “${p.title}”.`);
       await load();
     } catch (err) {
-      onMessage("error", err instanceof Error ? err.message : "Stripe sync failed");
+      const msg = err instanceof Error ? err.message : "Stripe sync failed";
+      onMessage(
+        "error",
+        /billing is not enabled|stripe is not configured|STRIPE_SECRET_KEY/i.test(msg)
+          ? "Billing is not enabled yet. Add Stripe keys on the server, then Sync Stripe."
+          : msg
+      );
     } finally {
       setBusy(false);
     }

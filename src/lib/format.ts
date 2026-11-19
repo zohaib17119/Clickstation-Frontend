@@ -28,3 +28,12 @@ export function formatDuration(days: number) {
 export function planPriceLabel(plan: Pick<SubscriptionPlan, "priceCents" | "currency" | "durationDays">) {
   return `${formatMoney(plan.priceCents, plan.currency)} / ${formatDuration(plan.durationDays)}`;
 }
+
+/** Friendly copy when API returns Stripe-not-configured 503s. */
+export function formatBillingError(err: unknown, fallback = "Request failed"): string {
+  const msg = err instanceof Error ? err.message : fallback;
+  if (/billing is not enabled|stripe is not configured|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET/i.test(msg)) {
+    return "Billing is not enabled yet. Checkout and Sync Stripe will work after Stripe keys are set on the server.";
+  }
+  return msg || fallback;
+}

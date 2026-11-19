@@ -697,7 +697,7 @@ export function AdminPage() {
                     <select
                       value={subscription?.licenseChannel ?? "standard"}
                       disabled={busyId === user.id}
-                      title="Standard = 72h offline grace; Extended = 365d (private Setup)"
+                      title="Standard = 72h offline grace; Extended = 365d owner-private Setup (not public)"
                       onChange={(e) =>
                         void patch(
                           user.id,
@@ -705,7 +705,7 @@ export function AdminPage() {
                             licenseChannel: e.target.value as "standard" | "extended",
                           },
                           e.target.value === "extended"
-                            ? "License channel → Extended (1 year). Use Turn ON Extended for +365 days."
+                            ? "License channel → Extended (owner-private 365d). Not a public download."
                             : "License channel → Standard (72h)."
                         )
                       }
@@ -807,7 +807,7 @@ export function AdminPage() {
                             licenseChannel: "extended",
                             extendDays: 365,
                           },
-                          "Extended access ON (+365 days). Give them ClickStation-Setup-Extended.exe privately."
+                          "Extended ON (+365d) for owner-private Setup only — do not publish ClickStation-Setup-Extended.exe."
                         )
                       }
                     >

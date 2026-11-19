@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { SubscriptionPlan } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
-import { formatDuration, formatMoney } from "../lib/format";
+import { formatBillingError, formatDuration, formatMoney } from "../lib/format";
 import { ConversionBand, SectionHeading } from "../components/Marketing";
 import { Seo } from "../components/Seo";
 
@@ -55,9 +55,9 @@ export function PricingPage() {
       if (!res.url) throw new Error("Checkout unavailable");
       window.location.href = res.url;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Checkout failed";
-      setError(msg);
-      if (/already have an active Stripe subscription/i.test(msg)) {
+      const raw = err instanceof Error ? err.message : "";
+      setError(formatBillingError(err, "Checkout failed"));
+      if (/already have an active Stripe subscription/i.test(raw)) {
         try {
           const portal = await api.billingPortal(token);
           window.location.href = portal.url;

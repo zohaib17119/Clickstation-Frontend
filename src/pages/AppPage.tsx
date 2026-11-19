@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { Subscription } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { formatBillingError } from "../lib/format";
 
 const WHATSAPP = import.meta.env.VITE_WHATSAPP_URL as string | undefined;
 const LOGO_SRC = import.meta.env.VITE_LOGO_URL ?? "/images/clickstation-logo.png";
@@ -94,7 +95,7 @@ export function AppPage() {
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : "Checkout failed";
-        setError(msg);
+        setError(formatBillingError(err, "Checkout failed"));
         if (/already have an active Stripe subscription/i.test(msg)) {
           try {
             const portal = await api.billingPortal(token);
@@ -188,7 +189,7 @@ export function AppPage() {
       window.location.href = res.url;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Checkout failed";
-      setError(msg);
+      setError(formatBillingError(err, "Checkout failed"));
       // Upgrade / dual-billing guidance: open Customer Portal when already subscribed.
       if (/already have an active Stripe subscription/i.test(msg)) {
         try {
@@ -223,7 +224,7 @@ export function AppPage() {
       const res = await api.billingPortal(token);
       window.location.href = res.url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open billing portal");
+      setError(formatBillingError(err, "Could not open billing portal"));
       setBusy(false);
     }
   }
@@ -237,7 +238,7 @@ export function AppPage() {
       await refresh();
       setOk(res.message);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Cancel failed");
+      setError(formatBillingError(err, "Cancel failed"));
     } finally {
       setBusy(false);
     }
@@ -252,7 +253,7 @@ export function AppPage() {
       await refresh();
       setOk(res.message);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Resume failed");
+      setError(formatBillingError(err, "Resume failed"));
     } finally {
       setBusy(false);
     }

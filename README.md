@@ -1,6 +1,6 @@
-# Clickstation Fontend — Windows download portal
+# ClickStation — marketing site and Windows customer portal
 
-React (Vite) account portal for Windows software download.
+React (Vite) SaaS marketing website with an authenticated Windows software customer portal.
 
 ## Setup
 
@@ -9,19 +9,19 @@ npm install
 npm run dev
 ```
 
-App: `http://localhost:5173` (entry `/windows`)
+App: `http://localhost:5173`
 
 Env (`.env`):
 
 - `VITE_API_URL` — backend (default `http://localhost:4000`)
-- `VITE_SITE_URL` — main site links (default `https://clickstation.pk`)
 - `VITE_WHATSAPP_URL` — payment / activation chat link
+- `VITE_LOGO_URL` — optional externally hosted ClickStation logo
 
 ## Routes
 
-- `/windows` — entry from site Downloads page
-- `/login`, `/register`
-- `/app` — account, payment/activation, gated download, license placeholder
-- `/admin` — activate / deactivate customers
+- Marketing: `/`, `/features`, `/template-designer`, `/photo-experiences`, `/how-it-works`, `/use-cases`, `/gallery`, `/pricing`, `/downloads`, `/resources`, `/contact`
+- Compatibility aliases: `/download` and `/windows` redirect to `/downloads`
+- Customer portal: `/login`, `/register`, `/app` (account, activation, and authorised download)
+- Admin: `/admin` (subscription, cloud-storage, plan, and camera-management controls)
 
-On [clickstation.pk/downloads](https://clickstation.pk/downloads), set `PUBLIC_SOFTWARE_PORTAL_URL` so Windows **Request Free Access** redirects here.
+The public marketing site intentionally does not replace the portal APIs. See [the marketing roadmap](docs/clickstation-marketing-roadmap.md) for the retained integrations, asset-capture brief, and future Stripe work.

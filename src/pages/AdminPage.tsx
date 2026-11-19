@@ -5,9 +5,12 @@ import type {
   CustomerRow,
   FailedCameraRow,
   Subscription,
+  SubscriptionPlan,
   SupportedCameraRow,
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { AdminPlansPanel } from "../components/AdminPlansPanel";
+import { formatDuration } from "../lib/format";
 
 const EMPTY_CLOUD: CloudR2Settings = {
   enabled: false,
@@ -45,10 +48,15 @@ export function AdminPage() {
   const [secretAccessKeySet, setSecretAccessKeySet] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudLoadHint, setCloudLoadHint] = useState("");
+  const [stripeEvents, setStripeEvents] = useState<
+    Array<{ id: string; type: string; receivedAt: string }>
+  >([]);
+  const [stripeEventsBusy, setStripeEventsBusy] = useState(false);
   const [supportedCams, setSupportedCams] = useState<SupportedCameraRow[]>([]);
   const [failedCams, setFailedCams] = useState<FailedCameraRow[]>([]);
   const [camBusyKey, setCamBusyKey] = useState<string | null>(null);
   const [notifyVersion, setNotifyVersion] = useState("");
+  const [catalogPlans, setCatalogPlans] = useState<SubscriptionPlan[]>([]);
 
   async function load() {
     if (!token) return;
@@ -96,10 +104,29 @@ export function AdminPage() {
     }
   }
 
+  async function loadStripeEvents() {
+    if (!token) return;
+    setStripeEventsBusy(true);
+    try {
+      const res = await api.listStripeEvents(token, 40);
+      setStripeEvents(res.events);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load Stripe webhook events");
+    } finally {
+      setStripeEventsBusy(false);
+    }
+  }
+
   useEffect(() => {
     void load();
     void loadCloud();
     void loadCameras();
+    void loadStripeEvents();
+    if (!token) return;
+    void api
+      .listAdminPlans(token)
+      .then((res) => setCatalogPlans(res.plans))
+      .catch(() => setCatalogPlans([]));
   }, [token]);
 
   async function saveCloud(testConnection = false) {
@@ -151,10 +178,15 @@ export function AdminPage() {
       status?: Subscription["status"];
       paymentStatus?: Subscription["paymentStatus"];
       plan?: Subscription["plan"];
+      planId?: string | null;
       endsAt?: string | null;
       extendDays?: number;
       revokeLicenses?: boolean;
       licenseChannel?: "standard" | "extended";
+      grantType?: Subscription["grantType"];
+      complimentaryDays?: number;
+      complimentaryUntil?: string;
+      cancelStripe?: boolean;
     },
     successMsg?: string
   ) {
@@ -245,8 +277,8 @@ export function AdminPage() {
 
   return (
     <div className="admin-page">
-      <header className="admin-header">
-        <p className="kicker">Admin</p>
+      <header className="admin-header animate-rise">
+        <p className="kicker">Admin console</p>
         <h1>Customer access control</h1>
         <p className="muted">
           <strong>Turn OFF</strong> ends subscription and revokes device licenses. While online,
@@ -265,6 +297,68 @@ export function AdminPage() {
           {ok}
         </p>
       )}
+
+      {token && (
+        <AdminPlansPanel
+          token={token}
+          onMessage={(kind, text) => {
+            if (kind === "ok") {
+              setOk(text);
+              setError("");
+            } else {
+              setError(text);
+              setOk("");
+            }
+          }}
+        />
+      )}
+
+      <section className="admin-cloud-panel software-shell" style={{ marginBottom: 24 }}>
+        <div className="admin-cloud-head">
+          <div>
+            <p className="kicker">Stripe webhooks</p>
+            <h2>Recent event log</h2>
+            <p className="muted">
+              Idempotent claim log from <code>stripe_events</code>. Empty after a fresh migrate until
+              Checkout or invoice webhooks arrive.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={stripeEventsBusy || !token}
+            onClick={() => void loadStripeEvents()}
+          >
+            {stripeEventsBusy ? "Loading…" : "Refresh"}
+          </button>
+        </div>
+        {stripeEvents.length === 0 ? (
+          <p className="muted">No webhook events recorded yet.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="admin-table" style={{ width: "100%", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th align="left">Type</th>
+                  <th align="left">Received</th>
+                  <th align="left">Event id</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stripeEvents.map((ev) => (
+                  <tr key={ev.id}>
+                    <td>{ev.type}</td>
+                    <td>{formatEnds(ev.receivedAt)}</td>
+                    <td>
+                      <code style={{ fontSize: 11 }}>{ev.id}</code>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="admin-cloud-panel software-shell">
         <div className="admin-cloud-head">
@@ -579,6 +673,9 @@ export function AdminPage() {
                   <td>
                     <div className="small">
                       {subscription?.plan ?? "—"} / {subscription?.paymentStatus ?? "—"}
+                      {subscription?.grantType === "lifetime" ? " · lifetime" : ""}
+                      {subscription?.hasStripeBilling ? " · Stripe" : ""}
+                      {subscription?.cancelAtPeriodEnd ? " · cancel@end" : ""}
                     </div>
                     <select
                       value={subscription?.plan ?? "manual"}
@@ -592,6 +689,7 @@ export function AdminPage() {
                       <option value="manual">manual</option>
                       <option value="monthly">monthly</option>
                       <option value="yearly">yearly</option>
+                      <option value="event">event</option>
                     </select>
                     <div className="small" style={{ marginTop: 6 }}>
                       Desktop license
@@ -616,7 +714,15 @@ export function AdminPage() {
                       <option value="extended">Extended (1 year)</option>
                     </select>
                   </td>
-                  <td className="small">{formatEnds(subscription?.endsAt)}</td>
+                  <td className="small">
+                    {subscription?.grantType === "lifetime"
+                      ? "Lifetime"
+                      : formatEnds(
+                          subscription?.accessUntil ??
+                            subscription?.currentPeriodEnd ??
+                            subscription?.endsAt
+                        )}
+                  </td>
                   <td className="small">
                     {license ? (
                       <>
@@ -634,6 +740,39 @@ export function AdminPage() {
                     )}
                   </td>
                   <td className="actions">
+                    {catalogPlans.length > 0 && (
+                      <select
+                        defaultValue=""
+                        disabled={busyId === user.id}
+                        aria-label="Apply catalog plan"
+                        onChange={(e) => {
+                          const planId = e.target.value;
+                          e.target.value = "";
+                          if (!planId) return;
+                          const plan = catalogPlans.find((p) => p.id === planId);
+                          void patch(
+                            user.id,
+                            {
+                              planId,
+                              status: "active",
+                              paymentStatus: "paid",
+                              licenseChannel: "standard",
+                            },
+                            plan
+                              ? `Access ON via ${plan.title} (+${formatDuration(plan.durationDays)}).`
+                              : "Access ON via catalog plan."
+                          );
+                        }}
+                      >
+                        <option value="">Apply plan…</option>
+                        {catalogPlans.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.title} ({formatDuration(p.durationDays)})
+                            {!p.isActive ? " [inactive]" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <button
                       type="button"
                       className="btn btn-primary"
@@ -686,9 +825,49 @@ export function AdminPage() {
                     </button>
                     <button
                       type="button"
+                      className="btn btn-ghost"
+                      disabled={busyId === user.id}
+                      title="Complimentary access for 30 days"
+                      onClick={() =>
+                        void patch(
+                          user.id,
+                          {
+                            grantType: "complimentary_timed",
+                            complimentaryDays: 30,
+                            paymentStatus: "complimentary",
+                            status: "active",
+                          },
+                          "Complimentary 30 days granted."
+                        )
+                      }
+                    >
+                      Comp 30d
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={busyId === user.id}
+                      title="Complimentary lifetime access"
+                      onClick={() =>
+                        void patch(
+                          user.id,
+                          {
+                            grantType: "lifetime",
+                            paymentStatus: "complimentary",
+                            status: "active",
+                            endsAt: null,
+                          },
+                          "Complimentary lifetime granted."
+                        )
+                      }
+                    >
+                      Comp lifetime
+                    </button>
+                    <button
+                      type="button"
                       className="btn btn-danger"
                       disabled={busyId === user.id}
-                      title="End subscription and revoke all device licenses"
+                      title="End subscription immediately, revoke licenses, cancel Stripe if linked"
                       onClick={() =>
                         void patch(
                           user.id,
@@ -697,8 +876,9 @@ export function AdminPage() {
                             paymentStatus: "unpaid",
                             endsAt: new Date().toISOString(),
                             revokeLicenses: true,
+                            cancelStripe: true,
                           },
-                          "Access OFF — licenses revoked. Customer blocked on next Start Session (when online)."
+                          "Access OFF — licenses revoked; Stripe cancelled if linked."
                         )
                       }
                     >

@@ -1,21 +1,36 @@
 import { useState, type FormEvent } from "react";
-import { Link, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+
+const LOGO_SRC = import.meta.env.VITE_LOGO_URL ?? "/images/clickstation-logo.png";
 
 export function LoginPage() {
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const planSlug = (searchParams.get("plan") ?? "").trim().toLowerCase();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const next = (location.state as { from?: string } | null)?.from ?? "/app";
+  const fromState = (location.state as { from?: string } | null)?.from;
+  const afterLogin = planSlug
+    ? `/app?plan=${encodeURIComponent(planSlug)}`
+    : fromState && fromState.startsWith("/")
+      ? fromState
+      : "/app";
 
   if (!loading && user) {
-    return <Navigate to={user.role === "admin" ? "/admin" : "/app"} replace />;
+    const dest =
+      user.role === "admin"
+        ? "/admin"
+        : planSlug
+          ? `/app?plan=${encodeURIComponent(planSlug)}`
+          : "/app";
+    return <Navigate to={dest} replace />;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -24,7 +39,7 @@ export function LoginPage() {
     setBusy(true);
     try {
       await login(email, password);
-      navigate(next.startsWith("/") ? next : "/app");
+      navigate(afterLogin);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -34,17 +49,15 @@ export function LoginPage() {
 
   return (
     <div className="auth-page">
-      <form className="auth-card" onSubmit={onSubmit}>
-        <img
-          className="auth-card-logo"
-          src="/images/clickstation-logo.png"
-          alt="ClickStation"
-          width={164}
-          height={50}
-        />
-        <p className="kicker">ClickStation portal</p>
+      <form className="auth-card animate-rise" onSubmit={onSubmit}>
+        <img className="auth-card-logo" src={LOGO_SRC} alt="ClickStation" width={164} height={50} />
+        <p className="kicker">Operator portal</p>
         <h1>Sign in</h1>
-        <p className="muted">Download Windows software and manage your booth license.</p>
+        <p className="muted">
+          {planSlug
+            ? `Continue to the “${planSlug}” plan after sign-in.`
+            : "Download Windows software and manage your booth license."}
+        </p>
         {error && <p className="form-error">{error}</p>}
         <label>
           Email
@@ -80,7 +93,10 @@ export function LoginPage() {
           {busy ? "Signing in…" : "Sign in"}
         </button>
         <p className="auth-switch">
-          New here? <Link to="/register">Create an account</Link>
+          New here?{" "}
+          <Link to={planSlug ? `/register?plan=${encodeURIComponent(planSlug)}` : "/register"}>
+            Create an account
+          </Link>
         </p>
       </form>
     </div>

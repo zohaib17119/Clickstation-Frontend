@@ -5,6 +5,7 @@ import type {
   FailedCameraRow,
   MePayload,
   Subscription,
+  SubscriptionPlan,
   SupportedCameraRow,
 } from "./types";
 
@@ -66,6 +67,60 @@ export const api = {
       body: "{}",
     });
   },
+  releaseLicense(token: string) {
+    return request<{ ok: boolean; message: string }>("/me/license/release", {
+      method: "POST",
+      token,
+      body: "{}",
+    });
+  },
+  checkout(token: string, body: { planId?: string; planSlug?: string }) {
+    return request<{ url: string; sessionId: string }>("/billing/checkout", {
+      method: "POST",
+      token,
+      body: JSON.stringify(body),
+    });
+  },
+  billingPortal(token: string) {
+    return request<{ url: string }>("/billing/portal", {
+      method: "POST",
+      token,
+      body: "{}",
+    });
+  },
+  cancelBilling(token: string) {
+    return request<{ subscription: Subscription; message: string }>("/billing/cancel", {
+      method: "POST",
+      token,
+      body: "{}",
+    });
+  },
+  resumeBilling(token: string) {
+    return request<{ subscription: Subscription; message: string }>("/billing/resume", {
+      method: "POST",
+      token,
+      body: "{}",
+    });
+  },
+  listInvoices(token: string) {
+    return request<{
+      invoices: Array<{
+        id: string;
+        number: string | null;
+        status: string | null;
+        amountPaid: number;
+        currency: string;
+        created: string;
+        hostedInvoiceUrl: string | null;
+        invoicePdf: string | null;
+      }>;
+    }>("/billing/invoices", { token });
+  },
+  listStripeEvents(token: string, limit = 50) {
+    return request<{
+      events: Array<{ id: string; type: string; receivedAt: string }>;
+    }>(`/admin/stripe-events?limit=${limit}`, { token });
+  },
   listCustomers(token: string) {
     return request<{ customers: CustomerRow[] }>("/admin/customers", { token });
   },
@@ -85,11 +140,80 @@ export const api = {
       }
     );
   },
+  listPlans() {
+    return request<{ plans: SubscriptionPlan[] }>("/plans");
+  },
+  listAdminPlans(token: string) {
+    return request<{ plans: SubscriptionPlan[] }>("/admin/plans", { token });
+  },
+  createPlan(
+    token: string,
+    body: {
+      slug: string;
+      title: string;
+      description?: string;
+      priceCents: number;
+      currency?: string;
+      durationDays: number;
+      isActive?: boolean;
+      sortOrder?: number;
+      badge?: string;
+      billingInterval?: SubscriptionPlan["billingInterval"];
+      syncStripe?: boolean;
+      promoPercentOff?: number | null;
+      promoAmountOffCents?: number | null;
+      promoStartsAt?: string | null;
+      promoEndsAt?: string | null;
+      promoActive?: boolean;
+    }
+  ) {
+    return request<{ plan: SubscriptionPlan }>("/admin/plans", {
+      method: "POST",
+      token,
+      body: JSON.stringify(body),
+    });
+  },
+  patchPlan(
+    token: string,
+    planId: string,
+    body: Partial<{
+      slug: string;
+      title: string;
+      description: string;
+      priceCents: number;
+      currency: string;
+      durationDays: number;
+      isActive: boolean;
+      sortOrder: number;
+      badge: string;
+      billingInterval: SubscriptionPlan["billingInterval"];
+      syncStripe: boolean;
+      promoPercentOff: number | null;
+      promoAmountOffCents: number | null;
+      promoStartsAt: string | null;
+      promoEndsAt: string | null;
+      promoActive: boolean;
+    }>
+  ) {
+    return request<{ plan: SubscriptionPlan }>(`/admin/plans/${planId}`, {
+      method: "PATCH",
+      token,
+      body: JSON.stringify(body),
+    });
+  },
+  syncPlanStripe(token: string, planId: string) {
+    return request<{ plan: SubscriptionPlan }>(`/admin/plans/${planId}/sync-stripe`, {
+      method: "POST",
+      token,
+      body: "{}",
+    });
+  },
   patchSubscription(
     token: string,
     customerId: string,
     body: {
       plan?: Subscription["plan"];
+      planId?: string | null;
       status?: Subscription["status"];
       paymentStatus?: Subscription["paymentStatus"];
       endsAt?: string | null;
@@ -97,6 +221,10 @@ export const api = {
       extendDays?: number;
       revokeLicenses?: boolean;
       licenseChannel?: "standard" | "extended";
+      grantType?: Subscription["grantType"];
+      complimentaryDays?: number;
+      complimentaryUntil?: string;
+      cancelStripe?: boolean;
     }
   ) {
     return request<{ user: CustomerRow["user"]; subscription: Subscription }>(

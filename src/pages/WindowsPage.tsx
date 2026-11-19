@@ -8,7 +8,7 @@ export function WindowsPage() {
     <>
       <section className="windows-hero">
         <div className="software-shell hero-grid">
-          <div>
+          <div className="animate-rise">
             <p className="eyebrow">Windows desktop edition</p>
             <h1>
               Get ClickStation for Windows. <span>Official.</span>
@@ -20,27 +20,27 @@ export function WindowsPage() {
             <div className="hero-actions">
               {!loading && user ? (
                 <Link to="/app" className="btn btn-primary btn-lg">
-                  Open download center
+                  Open account dashboard
                 </Link>
               ) : (
                 <>
                   <Link to="/register" className="btn btn-primary btn-lg">
                     Create account
                   </Link>
-                  <Link to="/login" className="btn btn-ghost btn-lg" style={{ color: "#fff", borderColor: "rgba(255,255,255,.2)", background: "rgba(255,255,255,.06)" }}>
+                  <Link to="/login" className="btn btn-ghost btn-lg">
                     Sign in
                   </Link>
                 </>
               )}
             </div>
             <div className="trust-row">
-              <span>250K+ downloads</span>
-              <span>79K+ active users</span>
+              <span>Official Setup</span>
+              <span>License-bound PC</span>
               <span>Direct support</span>
             </div>
           </div>
           <img
-            className="hero-visual"
+            className="hero-visual animate-rise-delay"
             src="/images/clickstation-interface-light.webp"
             alt="ClickStation photo booth software interface"
           />
@@ -62,7 +62,7 @@ export function WindowsPage() {
               <h3>Payment &amp; activation</h3>
               <p>
                 Choose a plan and complete payment. An admin activates your subscription when
-                payment is confirmed (Stripe comes later).
+                payment is confirmed.
               </p>
             </article>
             <article>
